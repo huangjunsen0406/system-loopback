@@ -75,6 +75,12 @@ if(SLB_BUILD_TESTS AND SLB_BUILD_SHARED)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
+    if(MSVC)
+        target_compile_options(test_abi PRIVATE /std:c11 /experimental:c11atomics)
+    else()
+        set_target_properties(test_abi PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+        target_link_libraries(test_abi PRIVATE m)
+    endif()
     target_link_libraries(test_abi PRIVATE system_loopback)
     add_test(NAME test_abi COMMAND test_abi)
 endif()

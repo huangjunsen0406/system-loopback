@@ -23,7 +23,7 @@ func TestABIAndBackend(t *testing.T) {
 func TestOpenOrCleanError(t *testing.T) {
 	stream, err := Open(Options{})
 	if err != nil {
-		if errors.Is(err, ErrPermissionDenied) || errors.Is(err, ErrUnsupported) {
+		if errors.Is(err, ErrPermissionDenied) || errors.Is(err, ErrUnsupported) || errors.Is(err, ErrDeviceNotFound) {
 			t.Logf("Expected environment limitation: %v", err)
 			return
 		}
