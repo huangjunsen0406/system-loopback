@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 
 from system_loopback import (
@@ -30,6 +31,12 @@ class TestSystemLoopbackBinding(unittest.TestCase):
         self.assertEqual(int(Status.OK), 0)
 
     def test_live_open_or_clean_platform_error(self) -> None:
+        # Headless macOS CI runners have no interactive session to dismiss the TCC
+        # System Audio Recording prompt, causing AudioDeviceStart to block until
+        # MACH_RCV_TIMED_OUT (180s). Run live capture locally or when explicitly opted in.
+        if os.environ.get("CI") and backend_name() == "coreaudio-tap" and not os.environ.get("SLB_RUN_LIVE_TESTS"):
+            self.skipTest("Skip interactive Core Audio TCC capture on headless macOS CI")
+
         try:
             with SystemLoopback(config=LoopbackConfig()) as lb:
                 self.assertGreaterEqual(lb.sample_rate, 8000)

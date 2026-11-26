@@ -2,6 +2,8 @@ package systemloopback
 
 import (
 	"errors"
+	"os"
+	"runtime"
 	"testing"
 )
 
@@ -21,6 +23,10 @@ func TestABIAndBackend(t *testing.T) {
 }
 
 func TestOpenOrCleanError(t *testing.T) {
+	if os.Getenv("CI") != "" && runtime.GOOS == "darwin" && os.Getenv("SLB_RUN_LIVE_TESTS") == "" {
+		t.Skip("skip interactive Core Audio TCC capture on headless macOS CI")
+	}
+
 	stream, err := Open(Options{})
 	if err != nil {
 		if errors.Is(err, ErrPermissionDenied) || errors.Is(err, ErrUnsupported) || errors.Is(err, ErrDeviceNotFound) {
