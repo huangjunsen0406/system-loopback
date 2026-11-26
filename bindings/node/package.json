@@ -1,7 +1,7 @@
 {
   "name": "system-loopback",
   "version": "0.1.0",
-  "description": "Cross-platform zero-driver system audio loopback capture for Node.js and Electron (Core Audio Process Tap, WASAPI Loopback, PipeWire/PulseAudio).",
+  "description": "Zero-driver cross-platform system audio loopback capture for Node.js and Electron (macOS Core Audio Tap, Windows WASAPI, Linux PipeWire/PulseAudio).",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +16,15 @@
     "prebuilds",
     "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huangjunsen0406/system-loopback.git",
+    "directory": "bindings/node"
+  },
+  "homepage": "https://github.com/huangjunsen0406/system-loopback#readme",
+  "bugs": {
+    "url": "https://github.com/huangjunsen0406/system-loopback/issues"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -34,7 +43,9 @@
     "aec",
     "coreaudio",
     "wasapi",
-    "pulseaudio"
+    "pulseaudio",
+    "pipewire",
+    "voice-ai"
   ],
   "license": "MIT"
 }

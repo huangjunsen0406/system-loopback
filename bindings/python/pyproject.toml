@@ -1,26 +1,38 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "system-loopback"
 version = "0.1.0"
-description = "Cross-platform system audio loopback capture (macOS Core Audio Tap, Windows WASAPI, Linux PulseAudio/PipeWire) with zero virtual audio drivers."
+description = "Zero-driver cross-platform system audio loopback capture (macOS Core Audio Tap, Windows WASAPI, Linux PipeWire/PulseAudio) for Python Voice AI, AEC, and transcription."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.9"
+authors = [
+    { name = "huangjunsen0406" },
+]
 keywords = ["audio", "loopback", "aec", "coreaudio", "wasapi", "pulseaudio", "pipewire", "voice-ai"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio :: Capture/Recording",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/huangjunsen0406/system-loopback"
+Repository = "https://github.com/huangjunsen0406/system-loopback"
+Issues = "https://github.com/huangjunsen0406/system-loopback/issues"
 
 [project.optional-dependencies]
 numpy = ["numpy>=1.24"]

@@ -1,4 +1,4 @@
-name: Release Native Artifacts
+name: Release (GitHub + PyPI + npm)
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-native:
+  build-macos-win:
     strategy:
       fail-fast: false
       matrix:
@@ -23,30 +23,31 @@ jobs:
           - os: windows-latest
             target: win32-x64
             arch: x64
-          - os: ubuntu-latest
-            target: linux-x64
-            arch: x64
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
 
-      - name: Build (Unix)
-        if: runner.os != 'Windows'
+      - name: Build macOS native library
+        if: runner.os == 'macOS'
         run: python3 scripts/build_native.py --arch ${{ matrix.arch }}
 
-      - name: Build (Windows)
+      - name: Build Windows native library
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          cmake -S core -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -S core -B build -DCMAKE_BUILD_TYPE=Release -DSLB_BUILD_TESTS=OFF
           cmake --build build --config Release
           New-Item -ItemType Directory -Force -Path dist/native/win32-x64 | Out-Null
           Copy-Item build/Release/system_loopback.dll dist/native/win32-x64/
+          Get-Item dist/native/win32-x64/system_loopback.dll
+
+      - name: Upload raw native binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-${{ matrix.target }}
+          path: dist/native/${{ matrix.target }}/*
 
       - name: Package C SDK archive
         shell: bash
@@ -56,20 +57,173 @@ jobs:
           cp dist/native/${{ matrix.target }}/* release-staging/lib/
           tar -czf libsystem_loopback-${{ github.ref_name }}-${{ matrix.target }}.tar.gz -C release-staging .
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload C SDK archive
+        uses: actions/upload-artifact@v4
         with:
           name: sdk-${{ matrix.target }}
           path: libsystem_loopback-*.tar.gz
 
-  publish-release:
-    needs: build-native
+  build-linux:
     runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - name: Build Linux native library (manylinux_2_28)
+        run: |
+          mkdir -p dist/native/linux-x64
+          gcc -shared -fPIC -O2 -Wall -Wextra -fvisibility=hidden \
+            -Icore/include -Icore/src core/src/linux_pulse.c \
+            -ldl -lpthread -o dist/native/linux-x64/libsystem_loopback.so
+          ls -lh dist/native/linux-x64/libsystem_loopback.so
+
+      - name: Upload raw native binary
+        uses: actions/upload-artifact@v4
         with:
-          path: artifacts
+          name: raw-linux-x64
+          path: dist/native/linux-x64/*
+
+      - name: Package C SDK archive
+        run: |
+          mkdir -p release-staging/include release-staging/lib
+          cp core/include/system_loopback.h release-staging/include/
+          cp dist/native/linux-x64/* release-staging/lib/
+          tar -czf libsystem_loopback-${{ github.ref_name }}-linux-x64.tar.gz -C release-staging .
+
+      - name: Upload C SDK archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-linux-x64
+          path: libsystem_loopback-*.tar.gz
+
+  publish-pypi:
+    needs: [build-macos-win, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download all native binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: raw-*
+          path: downloaded-raw
+
+      - name: Build platform-specific Python wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build "wheel==0.45.1" twine
+          export RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          python -c '
+          import os, pathlib, re
+          ver = os.environ["RELEASE_VERSION"]
+          p = pathlib.Path("bindings/python/pyproject.toml")
+          s = re.sub(r"(?m)^version = \"[^\"]+\"$", f"version = \"{ver}\"", p.read_text("utf-8"), count=1)
+          p.write_text(s, "utf-8")
+          '
+
+          mkdir -p dist-wheels
+          declare -A WHEEL_TAGS=(
+            ["darwin-arm64"]="macosx_11_0_arm64"
+            ["darwin-x64"]="macosx_11_0_x86_64"
+            ["win32-x64"]="win_amd64"
+            ["linux-x64"]="manylinux_2_28_x86_64"
+          )
+
+          for target in darwin-arm64 darwin-x64 win32-x64 linux-x64; do
+            rm -rf bindings/python/src/system_loopback/_libs bindings/python/src/*.egg-info bindings/python/dist bindings/python/build
+            mkdir -p "bindings/python/src/system_loopback/_libs/${target}"
+            cp "downloaded-raw/raw-${target}/"* "bindings/python/src/system_loopback/_libs/${target}/"
+
+            python -m build --wheel bindings/python --outdir tmp-wheel
+            whl=$(ls tmp-wheel/*.whl)
+            wheel tags --platform-tag="${WHEEL_TAGS[$target]}" --remove "$whl"
+            mv tmp-wheel/*.whl dist-wheels/
+            rm -rf tmp-wheel
+          done
+
+          ls -lh dist-wheels/
+          for w in dist-wheels/*.whl; do
+            echo "=== $w ==="
+            unzip -l "$w" | grep -E '_libs/|WHEEL$' || true
+          done
+          twine check dist-wheels/*.whl
+
+      - name: Upload built wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheels
+          path: dist-wheels/*.whl
+
+      - name: Publish wheels to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist-wheels/
+
+  publish-npm:
+    needs: [build-macos-win, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Download all native binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: raw-*
+          path: downloaded-raw
+
+      - name: Stage prebuilds, build TypeScript, and publish to npm
+        working-directory: bindings/node
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          for target in darwin-arm64 darwin-x64 win32-x64 linux-x64; do
+            mkdir -p "prebuilds/${target}"
+            cp "../../downloaded-raw/raw-${target}/"* "prebuilds/${target}/"
+          done
+
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          npm install
+          npm run build
+          npm pack --dry-run
+          npm publish --access public
+
+  publish-github-release:
+    needs: [build-macos-win, build-linux, publish-pypi, publish-npm]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download C SDK archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sdk-*
+          path: release-assets
           merge-multiple: true
 
-      - uses: softprops/action-gh-release@v2
+      - name: Download Python wheels
+        uses: actions/download-artifact@v4
         with:
-          files: artifacts/*.tar.gz
+          name: python-wheels
+          path: release-assets
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-assets/*
