@@ -1,0 +1,40 @@
+{
+  "name": "system-loopback",
+  "version": "0.1.0",
+  "description": "Cross-platform zero-driver system audio loopback capture for Node.js and Electron (Core Audio Process Tap, WASAPI Loopback, PipeWire/PulseAudio).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "prebuilds",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "koffi": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "keywords": [
+    "audio",
+    "loopback",
+    "electron",
+    "aec",
+    "coreaudio",
+    "wasapi",
+    "pulseaudio"
+  ],
+  "license": "MIT"
+}

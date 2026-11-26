@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  native-and-bindings:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: all
+          - os: windows-latest
+            arch: x64
+          - os: ubuntu-latest
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build native library & run C ABI tests (CMake)
+        run: |
+          cmake -S core -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+          ctest --test-dir build -C Release --output-on-failure
+
+      - name: Build & stage native binaries
+        if: runner.os != 'Windows'
+        run: python3 scripts/build_native.py --arch ${{ matrix.arch }} --stage
+
+      - name: Stage Windows native binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/native/win32-x64, bindings/python/src/system_loopback/_libs/win32-x64, bindings/node/prebuilds/win32-x64, bindings/go/prebuilds/win32-x64 | Out-Null
+          Copy-Item build/Release/system_loopback.dll dist/native/win32-x64/
+          Copy-Item build/Release/system_loopback.dll bindings/python/src/system_loopback/_libs/win32-x64/
+          Copy-Item build/Release/system_loopback.dll bindings/node/prebuilds/win32-x64/
+          Copy-Item build/Release/system_loopback.dll bindings/go/prebuilds/win32-x64/
+
+      - name: Test Python bindings
+        run: |
+          python -m pip install -e bindings/python
+          python -m unittest discover -s bindings/python/tests -v
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Test Go bindings (CGO_ENABLED=0)
+        working-directory: bindings/go
+        env:
+          CGO_ENABLED: "0"
+        run: go test -v ./...
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Typecheck & build Node/Electron bindings
+        working-directory: bindings/node
+        run: |
+          npm install
+          npm run build

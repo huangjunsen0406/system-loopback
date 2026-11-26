@@ -1,0 +1,75 @@
+name: Release Native Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: darwin-arm64
+            arch: arm64
+          - os: macos-14
+            target: darwin-x64
+            arch: x64
+          - os: windows-latest
+            target: win32-x64
+            arch: x64
+          - os: ubuntu-latest
+            target: linux-x64
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: python3 scripts/build_native.py --arch ${{ matrix.arch }}
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S core -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+          New-Item -ItemType Directory -Force -Path dist/native/win32-x64 | Out-Null
+          Copy-Item build/Release/system_loopback.dll dist/native/win32-x64/
+
+      - name: Package C SDK archive
+        shell: bash
+        run: |
+          mkdir -p release-staging/include release-staging/lib
+          cp core/include/system_loopback.h release-staging/include/
+          cp dist/native/${{ matrix.target }}/* release-staging/lib/
+          tar -czf libsystem_loopback-${{ github.ref_name }}-${{ matrix.target }}.tar.gz -C release-staging .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-${{ matrix.target }}
+          path: libsystem_loopback-*.tar.gz
+
+  publish-release:
+    needs: build-native
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.tar.gz

@@ -1,0 +1,35 @@
+# Build outputs
+build/
+dist/
+out/
+*.o
+*.obj
+*.a
+*.lib
+*.exp
+*.pdb
+*.so
+*.dylib
+*.dll
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+bindings/python/src/system_loopback/_libs/
+
+# Node / Electron
+node_modules/
+bindings/node/dist/
+bindings/node/prebuilds/
+
+# Go
+bindings/go/prebuilds/
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
